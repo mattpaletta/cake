@@ -1,0 +1,53 @@
+syntax = "proto3";
+package cake.peer;
+
+service CakePeer {
+    // These ones are publicly accessible, and call the internal books.
+    rpc get(PubObj) returns (PubObj) {};
+    rpc set(PubObj) returns (PubObj) {};
+    rpc remove(PubObj) returns (PubObj) {};
+    rpc exists(PubObj) returns (PubObj) {}; // Use the bool key
+
+
+    rpc connect_internal(Obj) returns (Obj) {};
+    rpc get_internal(Obj) returns (Obj) {};
+    rpc set_internal(Obj) returns (Obj) {};
+    rpc remove_internal(Obj) returns (Obj) {};
+    rpc exists_internal(Obj) returns (Obj) {}; // Use the bool key
+}
+
+message Node {
+    int64 id = 1;
+    int32 resp = 2;
+}
+
+message Obj {
+    // Internally, every key is stored as ID (just the hash).
+    int64 key = 1;
+    string pubkey = 2; // Use this within a single node.
+
+    oneof value {
+        string str = 3;
+        int64 bigint = 4;
+        int32 int = 5;
+        double dbl = 6;
+        float flt = 7;
+        bool bool = 8;
+    }
+
+    // For logging/debugging, store the node info also.
+    Node node = 9;
+}
+
+message PubObj {
+    string key = 1;
+
+    oneof value {
+        string str = 2;
+        int64 bigint = 3;
+        int32 int = 4;
+        double dbl = 5;
+        float flt = 6;
+        bool bool = 7;
+    }
+}

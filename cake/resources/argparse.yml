@@ -1,0 +1,11 @@
+Cake:
+  port:
+    default: 4567
+    required: False
+    help: "Port to listen on for cake server."
+
+  mode:
+    choices: ["local", "cluster"]
+    default: "local"
+    required: False
+    help: "Specify deployment type.  Controls whether to run functions locally or over (G)RPC"

@@ -1,0 +1,16 @@
+version: '3'
+services:
+  cake:
+    image: cake:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    tty: true
+#    deploy:
+#      replicas: 3
+    environment:
+      - "HOSTNAME_BOOTSTRAP=cake"
+    expose:
+      - 4567
+    ports:
+      - 4567:4567
