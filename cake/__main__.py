@@ -1,11 +1,15 @@
 import logging
 import os
 import sys
+from concurrent import futures
 from time import sleep
 
+import grpc
 from configs.parser import Parser
 
+from cake import ONE_DAY_IN_SECONDS
 from cake.cake_stub import Cake
+from cake.proto import cake_pb2_grpc
 
 
 def main():
@@ -33,11 +37,23 @@ def main():
 
     configs = Parser(argparse_file = final_data_path).get()
 
-    hostname = os.environ["HOSTNAME_BOOTSTRAP"]
+    hostname = os.environ["HOSTNAME_BOOTSTRAP"] if os.path.exists("/.dockerenv") else "localhost"
 
-    c = Cake(port = configs["port"], hostname = hostname, num_peers = 1)
-    print(c.set("hello", 1))
-    sleep(560)
+    c = Cake(port = configs["port"],
+             hostname = hostname,
+             num_peers = 1)
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers = 2))
+    cake_pb2_grpc.add_CakePeerServicer_to_server(servicer = c,
+                                                 server = server)
+    server.add_insecure_port('[::]:{0}'.format(2018))
+
+    server.start()
+    try:
+        import time
+        while True:
+            time.sleep(ONE_DAY_IN_SECONDS)
+    except KeyboardInterrupt:
+        server.stop(0)
 
 
 if __name__ == "__main__":
