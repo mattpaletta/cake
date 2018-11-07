@@ -1,1 +1,4 @@
 git+git://github.com/mattpaletta/configparser.git
+grpcio
+grpcio-tools
+mypy-protobuf

@@ -10,7 +10,7 @@ services:
 #      replicas: 3
     environment:
       - "HOSTNAME_BOOTSTRAP=cake"
-    expose:
-      - 4567
-    ports:
-      - 4567:4567
+#    expose:
+#      - 4567
+#    ports:
+#      - 4567:4567

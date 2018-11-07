@@ -45,9 +45,12 @@ def main():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers = 2))
     cake_pb2_grpc.add_CakePeerServicer_to_server(servicer = c,
                                                  server = server)
-    server.add_insecure_port('[::]:{0}'.format(2018))
+    server.add_insecure_port('[::]:{0}'.format(configs["port"]))
 
     server.start()
+
+    # Start listening first, then find peers.
+    c.boostrap()
     try:
         import time
         while True:

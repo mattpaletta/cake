@@ -1,7 +1,7 @@
 import hashlib
 import logging
 import uuid
-from typing import Union, Tuple, Callable, Dict
+from typing import Union, Tuple, Callable, Dict, List
 
 import grpc
 
@@ -19,6 +19,8 @@ def find_peers(hostname, port, id):
         current_peer_hostname = "{0}-{1}:{2}".format(hostname,
                                                      current_peer,
                                                      port)
+
+        logging.debug("Trying peer:" + current_peer_hostname)
 
         channel = grpc.insecure_channel("{0}".format(current_peer_hostname))
         connection = CakePeerStub(channel = channel)
@@ -41,38 +43,42 @@ def find_peers(hostname, port, id):
 
 class Cake(CakePeerServicer):
     def __init__(self, port: int, num_peers: int, hostname: str):
+        self._hostname = hostname
+
         self._port = port
         hash_val = hashlib.sha256(str(uuid.uuid1()).encode("utf")).hexdigest()
         self._id = int(str(int(hash_val, 16))[:10])
         self._current_nonce = 0
 
         logging.info("Starting system with ID: " + str(self._id))
-
-        logging.info("Finding peers.")
-        self._peers = find_peers(hostname, port, self._id)
-        logging.info("Found: {0} peers")
+        self._peers: List[str] = []
 
         # TODO:// Update this so it's not all just in memory.
-        self._data = {}
+        self._data: Dict[str, Union[str, int, float, bool]] = {}
+
+    def boostrap(self):
+        logging.info("Finding peers.")
+        self._peers = find_peers(self._hostname, self._port, self._id)
+        logging.info("Found: {0} peers".format(len(self._peers)))
 
     # Public methods
-    def get(self, request: PubObj, context: any) -> PubObj:
+    def get(self, request: PubObj, context) -> PubObj:
         return self._handle_internal_extern(request = request,
                                             fun = "get",
                                             context = context)
 
-    def set(self, request: PubObj, context: any) -> PubObj:
+    def set(self, request: PubObj, context) -> PubObj:
         return self._handle_internal_extern(request = request,
                                             fun = "set",
                                             context = context)
 
-    def set_internal(self, request: Obj, context: any) -> Obj:
+    def set_internal(self, request: Obj, context) -> Obj:
         return self._handle_internal(request, "set")
 
-    def get_internal(self, request: Obj, context: any) -> Obj:
+    def get_internal(self, request: Obj, context) -> Obj:
         return self._handle_internal(request, "get")
 
-    def _handle_internal(self, request: Obj, fun: str) -> Obj:
+    def _handle_internal(self, request: Obj, fun) -> Obj:
         key = request.pubkey
 
         if fun == "get":
@@ -83,18 +89,22 @@ class Cake(CakePeerServicer):
                 logging.warning("Invalid Key!")
 
         elif fun == "set":
-            value = self._get_value(request)
-            self._data.update({key: value})
+            _, value = self._get_value(request)
+            if value is not None:
+                self._data.update({key: value})
 
         else:
-            logging.error("Invalid fucntion.")
+            logging.error("Invalid function.")
             return request
 
-        return_data = self._set_value(value)
-        return Obj(pubkey = key, key = request.key, **return_data)
+        if value is not None:
+            return_data = self._set_value(value)
+            return Obj(pubkey = key, key = request.key, **return_data)
+        else:
+            return request
 
-    def connect_internal(self, request: Node, context: any) -> Node:
-        if request.id not in map(lambda peer: peer.id, self._peers):
+    def connect_internal(self, request: Node, context) -> Node:
+        if request.id not in self._peers:
             # If we don't have this node added, let's add it!
             # TODO:// This should be a hostname
             # self._peers.append(str(request.id))
@@ -103,7 +113,7 @@ class Cake(CakePeerServicer):
         # Return with our hello!
         return Node(id = request.id, resp = self._id)
 
-    def _handle_internal_extern(self, request: PubObj, fun: str, context: any) -> PubObj:
+    def _handle_internal_extern(self, request: PubObj, fun: str, context) -> PubObj:
         internal_obj = self._pub_to_obj(request)
 
         peer = self._find_peer(request.key)
@@ -116,12 +126,13 @@ class Cake(CakePeerServicer):
             return request
 
         fun_to_call = options.get(fun)
+        if fun_to_call is not None:
+            resp: Obj = fun_to_call(request = internal_obj,
+                                    context = context)
 
-        resp: Obj = fun_to_call(request = internal_obj,
-                                context = context)
-
-        assert type(resp) is Obj, "Invalid return type."
-        return self._obj_to_pub(resp)
+            assert type(resp) is Obj, "Invalid return type."
+            return self._obj_to_pub(resp)
+        return request
 
     def _obj_to_pub(self, obj: Obj) -> PubObj:
         option_key, option_val = self._get_value(obj)
@@ -138,11 +149,11 @@ class Cake(CakePeerServicer):
                    pubkey = pub.key,
                    **{option_key: option_val})
 
-    def _set_value(self, value: Union[str, int, float, bool]) -> Dict[str, Union[str, int, float, bool]]:
+    def _set_value(self, value: Union[str, int, float, bool]) -> Dict[str, Union[None, str, int, float, bool]]:
         ty = type(value)
         return {str(ty): value}
 
-    def _get_value(self, obj: Union[PubObj, Obj]) -> Tuple[str, Union[str, int, float, bool]]:
+    def _get_value(self, obj: Union[PubObj, Obj]) -> Tuple[str, Union[str, int, float, bool, None]]:
         which = str(obj.WhichOneof("value"))
 
         if which == "str":
@@ -158,6 +169,7 @@ class Cake(CakePeerServicer):
         elif which == "bool":
             parsed_val = obj.bool
         else:
+            parsed_val = None
             raise NotImplementedError("Can't parse value type: " + which)
         return which, parsed_val
 
