@@ -9,7 +9,7 @@ service CakePeer {
     rpc exists(PubObj) returns (PubObj) {}; // Use the bool key
 
 
-    rpc connect_internal(Obj) returns (Obj) {};
+    rpc connect_internal(Node) returns (Node) {};
     rpc get_internal(Obj) returns (Obj) {};
     rpc set_internal(Obj) returns (Obj) {};
     rpc remove_internal(Obj) returns (Obj) {};

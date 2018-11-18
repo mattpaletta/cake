@@ -9,8 +9,8 @@ services:
 #    deploy:
 #      replicas: 3
     environment:
-      - "HOSTNAME_BOOTSTRAP=cake"
-#    expose:
-#      - 4567
-#    ports:
-#      - 4567:4567
+      - "HOSTNAME_BOOTSTRAP=cake_cake"
+    expose:
+      - 4567
+    ports:
+      - 4567

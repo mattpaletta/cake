@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 from concurrent import futures
-from time import sleep
 
 import grpc
 from configs.parser import Parser
@@ -50,7 +49,7 @@ def main():
     server.start()
 
     # Start listening first, then find peers.
-    c.boostrap()
+    c.bootstrap()
     try:
         import time
         while True:

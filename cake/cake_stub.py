@@ -1,8 +1,7 @@
 import hashlib
 import logging
 import uuid
-from typing import Union, Tuple, Callable, Dict, List
-
+from typing import Union, Tuple, Dict, List
 import grpc
 
 from cake.proto.cake_pb2_grpc import CakePeerServicer, CakePeerStub
@@ -14,9 +13,9 @@ def find_peers(hostname, port, id):
     num_skipped = 0
     my_id = Node(id = id)
 
-    current_peer = 0
+    current_peer = 1
     while num_skipped < 3:
-        current_peer_hostname = "{0}-{1}:{2}".format(hostname,
+        current_peer_hostname = "{0}_{1}:{2}".format(hostname,
                                                      current_peer,
                                                      port)
 
@@ -24,6 +23,8 @@ def find_peers(hostname, port, id):
 
         channel = grpc.insecure_channel("{0}".format(current_peer_hostname))
         connection = CakePeerStub(channel = channel)
+
+        current_peer += 1
         try:
             grpc.channel_ready_future(channel).result(5)
         except grpc.FutureTimeoutError:
@@ -31,12 +32,12 @@ def find_peers(hostname, port, id):
             num_skipped += 1
             continue
 
-        if connection.connect_internal(my_id).resp != id:
+        other_node_reply: Node = connection.connect_internal(my_id)
+        if other_node_reply.resp != id:
             # If they are not the same, it's not us!
             peers_hostnames.append(current_peer_hostname)
         else:
             num_skipped += 1
-        current_peer += 1
 
     return peers_hostnames
 
@@ -56,7 +57,7 @@ class Cake(CakePeerServicer):
         # TODO:// Update this so it's not all just in memory.
         self._data: Dict[str, Union[str, int, float, bool]] = {}
 
-    def boostrap(self):
+    def bootstrap(self):
         logging.info("Finding peers.")
         self._peers = find_peers(self._hostname, self._port, self._id)
         logging.info("Found: {0} peers".format(len(self._peers)))
@@ -82,17 +83,20 @@ class Cake(CakePeerServicer):
         key = request.pubkey
 
         if fun == "get":
+            logging.debug("Getting value:" + str(key))
             if key in self._data.keys():
+                logging.debug("Got key: " + str(key))
                 value = self._data.get(key)
             else:
                 value = False
                 logging.warning("Invalid Key!")
 
         elif fun == "set":
+            logging.debug("Setting key: " + str(key))
             _, value = self._get_value(request)
             if value is not None:
+                logging.debug("Updating key: " + str(key))
                 self._data.update({key: value})
-
         else:
             logging.error("Invalid function.")
             return request
@@ -117,22 +121,21 @@ class Cake(CakePeerServicer):
         internal_obj = self._pub_to_obj(request)
 
         peer = self._find_peer(request.key)
-        options = {
-            "set": peer.set_internal,
-            "get": peer.get_internal
-        }
-        if fun not in options.keys():
+        logging.debug("Using method: " + fun)
+
+        resp: Obj = None
+        if fun == "set":
+            resp = peer.set_internal(request = internal_obj,
+                                          context = context)
+        elif fun == "get":
+            resp = peer.get_internal(request = internal_obj,
+                                          context = context)
+        else:
             logging.error("Invalid function!")
             return request
 
-        fun_to_call = options.get(fun)
-        if fun_to_call is not None:
-            resp: Obj = fun_to_call(request = internal_obj,
-                                    context = context)
-
-            assert type(resp) is Obj, "Invalid return type."
-            return self._obj_to_pub(resp)
-        return request
+        assert type(resp) is Obj, "Invalid return type."
+        return self._obj_to_pub(resp)
 
     def _obj_to_pub(self, obj: Obj) -> PubObj:
         option_key, option_val = self._get_value(obj)
@@ -174,6 +177,7 @@ class Cake(CakePeerServicer):
         return which, parsed_val
 
     def _find_peer(self, key):
+        # TODO:// Update to store LRU of connections for peers.
         # If we don't know of anybody else (like local mode, ask ourselves)
         if len(self._peers) > 0:
             return self._peers[0]
