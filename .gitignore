@@ -1,3 +1,6 @@
+**/*.swp
+**/*.DS_Store
+.idea/
 **_pb2.pyi
 **_pb2.py
 **_pb2_grpc.py
